@@ -16,6 +16,7 @@ states = {
 function _init ()
 	sel_deck = 6
 	sel_board = 1
+	last_placed = 1
 	state	= "selection"
  deck = {
 		generate_card(),
@@ -282,26 +283,37 @@ function sel_board_add (int)
 	end
 end
 
-function sel_deck_add (int)
-	local new = sel_deck + int
-	if new >= 1 and new <= 6 then
-		sel_deck = new
-	end
+function sel_prev_deck ()
+ repeat
+	 sel_deck = sel_deck - 1
+		if sel_deck < 1 then
+			sel_next_deck()
+		end	
+	until (deck[sel_deck] ~= nil)
 end
+
+function sel_next_deck ()
+ repeat
+	 sel_deck = sel_deck + 1
+		if sel_deck > 6 then
+			sel_prev_deck()
+		end	
+	until (deck[sel_deck] ~= nil)
+end
+
+
 -->8
 // state logic
 
 function run_selection_state()
 	if btnp(⬆️) then
-		sel_deck_add(-1)
+		sel_prev_deck()
 	elseif btnp(⬇️) then
-		sel_deck_add(1)
+		sel_next_deck()
 	end
 	
-	if btnp(4) then
-		if deck[sel_deck] ~= nil then
-			state = "placement"
-		end
+	if btnp(🅾️) then
+		state = "placement"
 	end
 	
 	draw_deck_selector()
@@ -313,6 +325,9 @@ function run_selection_state()
 end
 
 function run_placement_state()
+	draw_board_selector()
+	draw_board_sel_card()
+	
 	if btnp(➡️) then
 		sel_board_add(1)
 	elseif btnp(⬅️) then
@@ -322,12 +337,13 @@ function run_placement_state()
 	elseif btnp(⬇️) then
 		sel_board_add(4)
 	elseif btnp(🅾️) then
-		state = "resolve"
-		 
+		last_placed = sel_board
+		board[sel_board] = deck[sel_deck]
+		deck[sel_deck] = nil
+		sel_prev_deck()
+		//state = "resolve"
+		state = "selection"
 	end 
-	
-	draw_board_selector()
-	draw_board_sel_card()
 end
 
 
