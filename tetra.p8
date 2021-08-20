@@ -14,10 +14,12 @@ states = {
 }
 
 function _init ()
+	dbg = "" // debugging var
 	sel_deck = 6
 	sel_board = 1
-	last_placed_index = 1
-	state	= "selection"
+	last_placed_index = nil
+	last_team_turn = rnd({1,2})
+	state	= "resolve"
  deck = {
 		generate_card(),
 		generate_card(),
@@ -26,9 +28,7 @@ function _init ()
 		generate_card(),
 		generate_card(),
 	}
-	board = { // 1-16 index
-		generate_card()
-	}
+	board = {} // 1-16 index
 end
 
 function _draw ()
@@ -43,7 +43,10 @@ function _draw ()
 		run_placement_state()
 	elseif state == "resolve" then
 		run_resolve_state()
+	elseif state == "enemy" then
+		run_enemy_state()
 	end
+	print(dbg, 0, 120)
 end
 -->8
 // draw
@@ -137,7 +140,11 @@ function draw_board ()
 end
 
 function draw_card (card, x, y)
+	if card.team == 2 then
+		pal(15, 14)
+	end
 	draw_card_base(x, y)
+	pal()
 	draw_arrows(x, y, card)
 	draw_c_sprite(x, y, card)
 end
@@ -239,7 +246,7 @@ card = {
 function generate_card ()
 	local id = rndi(3)
 	return {
-		ai = false,
+		team = 1, // 2 is ai
 		kind = id,
 		sprite = c[id][1],
 		stats = {
@@ -259,6 +266,12 @@ function generate_card ()
 			rn1(),
 		}
 	}
+end
+
+function generate_ai_card()
+	local card = generate_card()
+	card.team = 2
+	return card
 end
 -->8
 // helpers
@@ -391,10 +404,74 @@ function points_to (card_i, tar_i)
 	end
 	return false
 end
+
+function resolve (i, battle, combo)
+	local card = board[i]
+	local adj = get_adjacent(i)
+	
+	for k,tar_i in pairs(adj) do
+		print("adj card "..tar_i)
+		
+		local fights_back = (
+			points_to(tar_i, i)
+			and battle
+		)
+		
+		if points_to(i, tar_i) then
+			if same_team(i, tar_i) then
+				return
+			end
+			
+			if fights_back then
+				dbg = "battle"
+				local win = true
+				if win then
+					flip_card(tar_i)
+					resolve(tar_i, false, true)
+				else
+					flip_card(i)
+					resolve(i, false, true)
+				end
+			else
+				flip_card(tar_i)
+				if combo then
+					resolve(tar_i, false, false)
+				end
+			end
+		end
+		print("nothing")
+	end
+end
+
+function same_team (i, tar_i)
+	local c_1 = board[i]
+	local c_2 = board[tar_i]
+	return c_1.team == c_2.team
+end
+
+function flip_card (i)
+	local team = board[i].team
+	if team == 1 then
+		board[i].team = 2
+	else
+		board[i].team = 1
+	end
+end
+
+function gg ()
+	local empty = {}
+	for i=1,16 do
+		if board[i] == nil then
+			add(empty, i)
+		end
+	end
+	return empty
+end
 -->8
 // state logic
 
 function run_selection_state()
+	last_team_turn = 1
 	if btnp(⬆️) then
 		sel_prev_deck()
 	elseif btnp(⬇️) then
@@ -438,21 +515,24 @@ end
 
 function run_resolve_state ()
 	local i = last_placed_index
-	local card = board[i]
-	local adj = get_adjacent(i)
-	
-	for k,tar_i in pairs(adj) do
-		print("adj card "..tar_i)
-		if points_to(i, tar_i) then
-			if points_to(tar_i, i) then
-				print("battle")
-			else
-				print("take card")
-			end
-		end
-		print("nothing")
+	if i ~= nil then
+		resolve(i, true, true)		
 	end
-	//	state = "selection"
+	if last_team_turn == 2 then
+		state = "selection"	
+	else
+		state = "enemy"
+	end	
+end
+
+function run_enemy_state ()
+	last_team_turn = 2
+	local c = generate_ai_card()
+	local empt = gg()
+	local i = rnd(empt)
+	board[i] = generate_ai_card()
+	last_placed_index = i
+	state = "resolve"
 end
 
 
