@@ -16,7 +16,7 @@ states = {
 function _init ()
 	sel_deck = 6
 	sel_board = 1
-	last_placed = 1
+	last_placed_index = 1
 	state	= "selection"
  deck = {
 		generate_card(),
@@ -26,8 +26,7 @@ function _init ()
 		generate_card(),
 		generate_card(),
 	}
-	board = {
-		// cards here
+	board = { // 1-16 index
 		generate_card()
 	}
 end
@@ -42,6 +41,8 @@ function _draw ()
 		run_selection_state()
 	elseif state == "placement" then
 		run_placement_state()
+	elseif state == "resolve" then
+		run_resolve_state()
 	end
 end
 -->8
@@ -238,6 +239,7 @@ card = {
 function generate_card ()
 	local id = rndi(3)
 	return {
+		ai = false,
 		kind = id,
 		sprite = c[id][1],
 		stats = {
@@ -301,7 +303,94 @@ function sel_next_deck ()
 	until (deck[sel_deck] ~= nil)
 end
 
+function board_i_to_pos (index)
+	local i = index-1
+	local y = flr(i / 4)
+	local x = i % 4
+	return {x, y}
+end
 
+function board_pos_to_i (x, y)
+	local i = y * 4 + x
+	return i + 1
+end
+
+function get_adjacent (i)
+	local pos = board_i_to_pos(i)
+	local x = pos[1]
+	local y = pos[2]
+	local coords = {
+		{x-1, y-1},
+		{x  , y-1},
+		{x+1, y-1},
+		{x-1, y  },
+		{x+1, y  },
+		{x-1, y+1},
+		{x  , y+1},
+		{x+1, y+1},
+	}
+	local cards_i = {}
+	
+	for c in all(coords) do
+		local x = c[1]
+		local y = c[2]
+		local i = board_pos_to_i(x,y)
+		if board[i] ~= nil then
+			add(cards_i, i) 
+		end
+	end
+	
+	return cards_i
+end
+
+function tostring(any)
+  if (type(any)~="table") return tostr(any)
+  local str = "{"
+  for k,v in pairs(any) do
+    if (str~="{") str=str..","
+    str=str..tostring(k).."="..tostring(v)
+  end
+  return str.."}"
+end
+
+function debug (any)
+	print(tostring(any))
+end
+
+function points_to (card_i, tar_i)
+	local c = board[card_i]
+	local cpos = board_i_to_pos(card_i)
+	local cx = cpos[1]
+	local cy = cpos[2]
+	local t = board[tar_i]
+	local tpos = board_i_to_pos(tar_i)
+	local tx = tpos[1]
+	local ty = tpos[2]
+	local arr_map = {
+		{-1,-1},
+		{0 ,-1},
+		{1 ,-1},
+		{-1, 0},
+		{1 , 0},
+		{-1, 1},
+		{0 , 1},
+		{1 , 1},
+	}
+	
+	for k,v in pairs(c.arrows) do
+		if v == 1 then
+			local rel_pos = arr_map[k]
+			local x_rel = rel_pos[1]
+			local y_rel = rel_pos[2]
+			local x = cx + x_rel
+			local y = cy + y_rel
+			if x == tx and y == ty then
+				return true
+			end
+		end
+	end
+	return false
+end
 -->8
 // state logic
 
@@ -324,10 +413,7 @@ function run_selection_state()
 	)
 end
 
-function run_placement_state()
-	draw_board_selector()
-	draw_board_sel_card()
-	
+function run_placement_state()	
 	if btnp(➡️) then
 		sel_board_add(1)
 	elseif btnp(⬅️) then
@@ -336,14 +422,37 @@ function run_placement_state()
 		sel_board_add(-4)
 	elseif btnp(⬇️) then
 		sel_board_add(4)
-	elseif btnp(🅾️) then
-		last_placed = sel_board
+	end
+	
+	draw_board_selector()
+	draw_board_sel_card()
+	
+	if btnp(🅾️) then
+		last_placed_index = sel_board
 		board[sel_board] = deck[sel_deck]
 		deck[sel_deck] = nil
 		sel_prev_deck()
-		//state = "resolve"
-		state = "selection"
-	end 
+		state = "resolve"
+	end
+end
+
+function run_resolve_state ()
+	local i = last_placed_index
+	local card = board[i]
+	local adj = get_adjacent(i)
+	
+	for k,tar_i in pairs(adj) do
+		print("adj card "..tar_i)
+		if points_to(i, tar_i) then
+			if points_to(tar_i, i) then
+				print("battle")
+			else
+				print("take card")
+			end
+		end
+		print("nothing")
+	end
+	//	state = "selection"
 end
 
 
